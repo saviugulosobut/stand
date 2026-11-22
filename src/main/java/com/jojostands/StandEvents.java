@@ -1,8 +1,12 @@
 package com.jojostands;
 
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.entity.mob.Angerable;
+import net.minecraft.item.Item;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
@@ -11,6 +15,9 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.particle.DustParticleEffect;
+import net.minecraft.particle.ParticleTypes;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.registry.tag.DamageTypeTags;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -29,11 +36,23 @@ public final class StandEvents {
     public static void register() {
         ServerTickEvents.END_WORLD_TICK.register(StandEvents::tickWorld);
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(StandEvents::allowDamage);
+        ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> TimeErase.onLoad(entity));
+        ServerLifecycleEvents.SERVER_STOPPING.register(TimeErase::endAll);
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> TimeErase.clear());
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            ServerPlayerEntity p = handler.getPlayer();
+            TimeErase.end(p.getServerWorld(), p);
+        });
+        ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
+            if (entity instanceof ServerPlayerEntity p) TimeErase.end(p.getServerWorld(), p);
+        });
     }
 
     private static void tickWorld(ServerWorld world) {
         long t = world.getTime();
         for (ServerPlayerEntity p : world.getPlayers()) {
+            TimeErase.tick(world, p);
+            KingCrimsonItem.tickEpitaph(world, p);
             if (t % 3 == 0) aura(world, p);
             if (t % 5 == 0) tickAllies(world, p);
         }
@@ -41,11 +60,18 @@ public final class StandEvents {
 
     /** Aura do stand: so muda a cor (dourado / vermelho) enquanto voce segura o item. */
     private static void aura(ServerWorld world, ServerPlayerEntity p) {
-        Vector3f color = Fx.colorFor(p.getMainHandStack().getItem());
+        Item held = p.getMainHandStack().getItem();
+        Vector3f color = Fx.colorFor(held);
+        boolean erasing = TimeErase.isActive(p);
+        if (color == null && erasing) color = Fx.RED;
         if (color == null) return;
         Vec3d back = Vec3d.fromPolar(0, p.getYaw()).multiply(-0.9);
-        world.spawnParticles(new DustParticleEffect(color, 1.5f),
-                p.getX() + back.x, p.getY() + 1.1, p.getZ() + back.z, 8, 0.35, 0.7, 0.35, 0.0);
+        double bx = p.getX() + back.x, bz = p.getZ() + back.z;
+        world.spawnParticles(new DustParticleEffect(color, erasing ? 2.2f : 1.5f),
+                bx, p.getY() + 1.1, bz, erasing ? 18 : 8, 0.4, 0.8, 0.4, 0.0);
+        if (held == JojoStands.KING_CRIMSON || erasing) {
+            world.spawnParticles(ParticleTypes.CRIMSON_SPORE, bx, p.getY() + 1.2, bz, 4, 0.4, 0.8, 0.4, 0.0);
+        }
     }
 
     /** Aliados: seguem o dono / lugar marcado, defendem o dono e nunca o atacam. */
@@ -107,14 +133,23 @@ public final class StandEvents {
         if (!(entity.getWorld() instanceof ServerWorld world)) return true;
         Entity attacker = source.getAttacker();
 
+        // ---- Tempo apagado: congelados nao sofrem dano na hora, o dano do dono fica ACUMULADO ----
+        if (TimeErase.isFrozen(entity) && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+            if (attacker instanceof ServerPlayerEntity sp) TimeErase.record(sp, entity, amount);
+            return false;
+        }
+
         // ---- Dono: aliados nunca o machucam + Epitafio ----
         if (entity instanceof ServerPlayerEntity p) {
             if (attacker != null && p.getUuid().equals(StandManager.getOwner(attacker))) return false;
             StandData d = StandManager.get(p);
             if (d.epitaphUntil > world.getTime() && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
-                d.epitaphUntil = 0;
-                p.sendMessage(Text.literal("§cEpitafio: voce previu o ataque e desviou!"), true);
+                p.sendMessage(Text.literal("§cEpitafio: ataque evitado!"), true);
                 Fx.burst(world, p.getPos().add(0, 1, 0), Fx.RED, 30);
+                world.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 1f, 1.6f);
+                if (attacker instanceof LivingEntity la && la != p) {
+                    la.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 40, 2)); // contra-ataque
+                }
                 return false;
             }
             return true;
@@ -136,4 +171,4 @@ public final class StandEvents {
         }
         return true;
     }
-                }
+            }
