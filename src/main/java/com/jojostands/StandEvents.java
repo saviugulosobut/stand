@@ -2,7 +2,7 @@ package com.jojostands;
 
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.entity.Angerable;
+import net.minecraft.entity.mob.Angerable;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
@@ -136,4 +136,4 @@ public final class StandEvents {
         }
         return true;
     }
-              }
+                }
