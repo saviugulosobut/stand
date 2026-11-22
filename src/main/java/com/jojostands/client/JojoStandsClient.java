@@ -38,9 +38,10 @@ public class JojoStandsClient implements ClientModInitializer {
             List<String> lines;
             if (held == JojoStands.KING_CRIMSON) {
                 lines = List.of("§cKing Crimson",
-                        "§fClique: §7Apagar Tempo (5 s)",
-                        "§fShift + clique: §7Epitafio (5 s)",
-                        "§fRecarga: §710 s   §fG: §7menu");
+                        "§fClique: §7Apagar Tempo (20 s) - de novo encerra",
+                        "§fShift + clique: §7Epitafio (20 s)",
+                        "§7Golpes no tempo apagado se acumulam",
+                        "§fRecarga: §71 s   §fG: §7menu");
             } else if (held == JojoStands.GOLDEN_EXPERIENCE) {
                 lines = List.of("§6Golden Experience",
                         "§fModo: §e" + ClientState.MODES[ClientState.mode],
