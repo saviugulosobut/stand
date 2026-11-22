@@ -9,16 +9,18 @@ import net.minecraft.text.Text;
 public class HelpScreen extends Screen {
     private static final int W = 300, H = 250;
     private static final String[] KC = {
-            "§cKing Crimson §7(recarga: 10 s)",
+            "§cKing Crimson §7(recarga: 1 s)",
             "",
-            "§fClique direito §7- Apagar Tempo:",
-            "§7  tudo em 40 blocos fica congelado por 5 s",
-            "§7  e voce ganha velocidade.",
+            "§fClique direito §7- Apagar Tempo (20 s):",
+            "§7  tudo em 48 blocos congela; so voce se move",
+            "§7  (Speed + pulo). Clique de novo: encerra.",
+            "§fDano acumulado: §7golpes nos congelados nao",
+            "§7  machucam na hora; tudo explode (+25%)",
+            "§7  quando o tempo volta.",
             "",
-            "§fShift + clique direito §7- Epitafio:",
-            "§7  por 5 s todos ao redor brilham (ve atraves",
-            "§7  das paredes) e o proximo golpe e evitado.",
-            "",
+            "§fShift + clique direito §7- Epitafio (20 s):",
+            "§7  todos ao redor brilham, todo ataque e",
+            "§7  evitado e o atacante fica lento.",
             "§7Aura: §cvermelha §7enquanto segura o item."
     };
     private static final String[] GE = {
@@ -70,4 +72,4 @@ public class HelpScreen extends Screen {
             ty += 11;
         }
     }
-          }
+}
