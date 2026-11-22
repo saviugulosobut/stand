@@ -3,7 +3,6 @@ package com.jojostands;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -17,16 +16,15 @@ import net.minecraft.util.TypedActionResult;
 import net.minecraft.world.World;
 
 public class KingCrimsonItem extends Item {
-    public static final int COOLDOWN = 200;        // 10 s
-    public static final int TIME_ERASE_TICKS = 100; // 5 s
-    public static final int EPITAPH_TICKS = 100;    // 5 s
+    public static final int COOLDOWN = 20;          // 1 s
+    public static final int EPITAPH_TICKS = 400;    // 20 s
 
     public KingCrimsonItem(Settings settings) { super(settings); }
 
     @Override
     public boolean hasGlint(ItemStack stack) { return true; }
 
-    /** Clique = Apagar Tempo | Shift + clique = Epitafio */
+    /** Clique = Apagar Tempo (clique de novo encerra) | Shift + clique = Epitafio (shift de novo encerra) */
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity player, Hand hand) {
         ItemStack stack = player.getStackInHand(hand);
@@ -35,32 +33,47 @@ public class KingCrimsonItem extends Item {
         ServerWorld sw = (ServerWorld) world;
         ServerPlayerEntity sp = (ServerPlayerEntity) player;
 
-        if (player.isSneaking()) epitaph(sw, sp); else timeErase(sw, sp);
+        if (player.isSneaking()) {
+            if (epitaphActive(sw, sp)) endEpitaph(sp); else startEpitaph(sw, sp);
+        } else {
+            if (TimeErase.isActive(sp)) TimeErase.end(sw, sp); else TimeErase.start(sw, sp);
+        }
         player.getItemCooldownManager().set(this, COOLDOWN);
         return TypedActionResult.success(stack);
     }
 
-    private static void timeErase(ServerWorld sw, ServerPlayerEntity p) {
-        for (LivingEntity e : sw.getEntitiesByClass(LivingEntity.class, p.getBoundingBox().expand(40),
-                x -> x != p && x.isAlive())) {
-            e.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, TIME_ERASE_TICKS, 255, false, false));
-            e.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, TIME_ERASE_TICKS, 255, false, false));
-            if (e instanceof MobEntity m) m.setTarget(null);
-        }
-        p.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, TIME_ERASE_TICKS, 2, false, false));
-        sw.playSound(null, p.getBlockPos(), SoundEvents.BLOCK_BEACON_DEACTIVATE, SoundCategory.PLAYERS, 1f, 0.5f);
-        Fx.burst(sw, p.getPos().add(0, 1, 0), Fx.RED, 60);
-        p.sendMessage(Text.literal("§cKing Crimson: o tempo foi apagado!"), true);
+    // ---------------- Epitafio ----------------
+    public static boolean epitaphActive(ServerWorld w, ServerPlayerEntity p) {
+        return StandManager.get(p).epitaphUntil > w.getTime();
     }
 
-    private static void epitaph(ServerWorld sw, ServerPlayerEntity p) {
+    private static void startEpitaph(ServerWorld sw, ServerPlayerEntity p) {
         StandManager.get(p).epitaphUntil = sw.getTime() + EPITAPH_TICKS;
-        for (LivingEntity e : sw.getEntitiesByClass(LivingEntity.class, p.getBoundingBox().expand(32),
-                x -> x != p && x.isAlive())) {
-            e.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, EPITAPH_TICKS, 0, false, false));
+        p.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, EPITAPH_TICKS, 0, false, false));
+        sw.playSound(null, p.getBlockPos(), SoundEvents.BLOCK_BEACON_ACTIVATE, SoundCategory.PLAYERS, 1.2f, 0.6f);
+        Fx.ring(sw, p.getPos().add(0, 0.2, 0), Fx.RED, 2, 30);
+        Fx.burst(sw, p.getPos().add(0, 1.5, 0), Fx.RED, 40);
+        p.sendMessage(Text.literal("§cEpitafio: voce ve o futuro! Todo ataque sera evitado por 20 s."), true);
+    }
+
+    private static void endEpitaph(ServerPlayerEntity p) {
+        StandManager.get(p).epitaphUntil = 0;
+        p.removeStatusEffect(StatusEffects.SPEED);
+        p.sendMessage(Text.literal("§cEpitafio encerrado."), true);
+    }
+
+    public static void tickEpitaph(ServerWorld w, ServerPlayerEntity p) {
+        long left = StandManager.get(p).epitaphUntil - w.getTime();
+        if (left <= 0) return;
+        if (left % 20 == 0) {
+            for (LivingEntity e : w.getEntitiesByClass(LivingEntity.class, p.getBoundingBox().expand(32),
+                    x -> x != p && x.isAlive())) {
+                e.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, 40, 0, false, false));
+            }
         }
-        sw.playSound(null, p.getBlockPos(), SoundEvents.BLOCK_BEACON_ACTIVATE, SoundCategory.PLAYERS, 1f, 0.6f);
-        Fx.burst(sw, p.getPos().add(0, 1.5, 0), Fx.RED, 30);
-        p.sendMessage(Text.literal("§cEpitafio: voce viu o futuro! O proximo golpe sera evitado."), true);
+        if (left % 4 == 0) Fx.ring(w, p.getPos().add(0, 2.2, 0), Fx.RED, 0.5, 8);
+        if (left % 10 == 0 && !TimeErase.isActive(p)) {
+            p.sendMessage(Text.literal("§cEpitafio: " + (left / 20) + "s"), true);
+        }
     }
 }
