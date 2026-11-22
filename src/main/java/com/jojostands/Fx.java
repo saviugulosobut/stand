@@ -21,4 +21,11 @@ public final class Fx {
     public static void burst(ServerWorld w, Vec3d pos, Vector3f color, int count) {
         w.spawnParticles(new DustParticleEffect(color, 1.6f), pos.x, pos.y, pos.z, count, 0.5, 0.6, 0.5, 0.02);
     }
+
+    public static void ring(ServerWorld w, Vec3d c, Vector3f color, double r, int n) {
+        for (int i = 0; i < n; i++) {
+            double a = 2 * Math.PI * i / n;
+            w.spawnParticles(new DustParticleEffect(color, 1.0f), c.x + Math.cos(a) * r, c.y, c.z + Math.sin(a) * r, 1, 0, 0, 0, 0);
+        }
+    }
 }
